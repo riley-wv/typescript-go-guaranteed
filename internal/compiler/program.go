@@ -850,6 +850,14 @@ func (p *Program) verifyCompilerOptions() {
 	if options.ExactOptionalPropertyTypes.IsTrue() && !options.GetStrictOptionValue(options.StrictNullChecks) {
 		createDiagnosticForOptionName(diagnostics.Option_0_cannot_be_specified_without_specifying_option_1, "exactOptionalPropertyTypes", "strictNullChecks")
 	}
+	if options.RuntimeGuarantees.EmitsRuntimeGuarantees() {
+		if options.NoEmitHelpers.IsTrue() {
+			createDiagnosticForOptionName(diagnostics.Option_0_cannot_be_specified_with_option_1, "runtimeGuarantees", "noEmitHelpers")
+		}
+		if options.ImportHelpers.IsTrue() {
+			createDiagnosticForOptionName(diagnostics.Option_0_cannot_be_specified_with_option_1, "runtimeGuarantees", "importHelpers")
+		}
+	}
 
 	if options.IsolatedDeclarations.IsTrue() {
 		if options.GetAllowJS() {
@@ -1305,6 +1313,9 @@ func (p *Program) getBindAndCheckDiagnosticsWithChecker(ctx context.Context, fil
 	// Checker creation forces binding, so bind diagnostics will be populated.
 	diags := slices.Clip(sourceFile.BindDiagnostics())
 	diags = append(diags, fileChecker.GetDiagnostics(ctx, sourceFile)...)
+	if runtimeGuaranteeModeForFile(sourceFile, compilerOptions).EnforcesRuntimeGuaranteeRisks() {
+		diags = append(diags, getRuntimeGuaranteeDiagnostics(sourceFile, compilerOptions, false /*suggestions*/)...)
+	}
 
 	isPlainJS := ast.IsPlainJSFile(sourceFile, compilerOptions.CheckJs)
 	if isPlainJS {
@@ -1389,6 +1400,10 @@ func (p *Program) getSuggestionDiagnosticsWithChecker(ctx context.Context, fileC
 	// Checker creation forces binding, so bind suggestion diagnostics will be populated.
 	diags := slices.Clip(sourceFile.BindSuggestionDiagnostics)
 	diags = append(diags, fileChecker.GetSuggestionDiagnostics(ctx, sourceFile)...)
+	runtimeGuarantees := runtimeGuaranteeModeForFile(sourceFile, p.Options())
+	if runtimeGuarantees.ReportsRuntimeGuaranteeRisks() && !runtimeGuarantees.EnforcesRuntimeGuaranteeRisks() {
+		diags = append(diags, getRuntimeGuaranteeDiagnostics(sourceFile, p.Options(), true /*suggestions*/)...)
+	}
 
 	return diags
 }

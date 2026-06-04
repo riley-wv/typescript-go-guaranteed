@@ -133,6 +133,10 @@ func getScriptTransformers(emitContext *printer.EmitContext, host printer.EmitHo
 			tx = append(tx, tstransforms.NewMetadataTransformer(&opts))
 		}
 
+		if options.RuntimeGuarantees.EmitsRuntimeGuarantees() {
+			tx = append(tx, tstransforms.NewRuntimeGuaranteesTransformer(&opts))
+		}
+
 		// erase types
 		tx = append(tx, tstransforms.NewTypeEraserTransformer(&opts))
 

@@ -392,6 +392,8 @@ func parseCompilerOptions(key string, value any, allOptions *core.CompilerOption
 		allOptions.ReactNamespace = ParseString(value)
 	case "rewriteRelativeImportExtensions":
 		allOptions.RewriteRelativeImportExtensions = ParseTristate(value)
+	case "runtimeGuarantees":
+		allOptions.RuntimeGuarantees = floatOrInt32ToFlag[core.RuntimeGuaranteesMode](value)
 	case "rootDir":
 		allOptions.RootDir = ParseString(value)
 	case "rootDirs":

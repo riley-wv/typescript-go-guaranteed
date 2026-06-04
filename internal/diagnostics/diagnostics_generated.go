@@ -4292,6 +4292,12 @@ var X_1_implementation = &Message{code: 100008, category: CategoryMessage, key: 
 
 var Set_the_number_of_projects_to_build_concurrently = &Message{code: 100009, category: CategoryMessage, key: "Set_the_number_of_projects_to_build_concurrently_100009", text: "Set the number of projects to build concurrently."}
 
+var Emit_runtime_type_checks_for_supported_TypeScript_annotations = &Message{code: 100010, category: CategoryMessage, key: "Emit_runtime_type_checks_for_supported_TypeScript_annotations_100010", text: "Emit runtime type checks for supported TypeScript annotations."}
+
+var Runtime_guarantees_cannot_model_0_Add_a_runtime_contract_handler_or_unsafe_boundary_before_enabling_strict_mode = &Message{code: 100050, category: CategoryError, key: "Runtime_guarantees_cannot_model_0_Add_a_runtime_contract_handler_or_unsafe_boundary_before_enabling_strict_mode_100050", text: "Runtime guarantees cannot model {0}. Add a runtime contract, handler, or unsafe boundary before enabling strict mode."}
+
+var Runtime_guarantees_observed_0_Add_a_runtime_contract_handler_or_unsafe_boundary_before_enabling_strict_mode = &Message{code: 100051, category: CategorySuggestion, key: "Runtime_guarantees_observed_0_Add_a_runtime_contract_handler_or_unsafe_boundary_before_enabling_strict_mode_100051", text: "Runtime guarantees observed {0}. Add a runtime contract, handler, or unsafe boundary before enabling strict mode."}
+
 var Deduplicate_packages_with_the_same_name_and_version = &Message{code: 100011, category: CategoryMessage, key: "Deduplicate_packages_with_the_same_name_and_version_100011", text: "Deduplicate packages with the same name and version."}
 
 var Loading = &Message{code: 100012, category: CategoryMessage, key: "Loading_100012", text: "Loading"}
@@ -8600,6 +8606,12 @@ func keyToMessage(key Key) *Message {
 		return X_1_implementation
 	case "Set_the_number_of_projects_to_build_concurrently_100009":
 		return Set_the_number_of_projects_to_build_concurrently
+	case "Emit_runtime_type_checks_for_supported_TypeScript_annotations_100010":
+		return Emit_runtime_type_checks_for_supported_TypeScript_annotations
+	case "Runtime_guarantees_cannot_model_0_Add_a_runtime_contract_handler_or_unsafe_boundary_before_enabling_strict_mode_100050":
+		return Runtime_guarantees_cannot_model_0_Add_a_runtime_contract_handler_or_unsafe_boundary_before_enabling_strict_mode
+	case "Runtime_guarantees_observed_0_Add_a_runtime_contract_handler_or_unsafe_boundary_before_enabling_strict_mode_100051":
+		return Runtime_guarantees_observed_0_Add_a_runtime_contract_handler_or_unsafe_boundary_before_enabling_strict_mode
 	case "Deduplicate_packages_with_the_same_name_and_version_100011":
 		return Deduplicate_packages_with_the_same_name_and_version
 	case "Loading_100012":

@@ -65,6 +65,19 @@ var paramHelper = &EmitHelper{
 };`,
 }
 
+var TsgGuaranteeHelper = &EmitHelper{
+	Name:       "typescript-guaranteed:guarantee",
+	ImportName: "__tsg",
+	Scoped:     false,
+	Text: `var __tsg = (this && this.__tsg) || function (value, tag, label, optional) {
+    if (optional && value === void 0) return value;
+    var actual = value === null ? "null" : typeof value;
+    var ok = tag === "object" ? value !== null && (actual === "object" || actual === "function") : actual === tag;
+    if (!ok) throw new TypeError("Runtime guarantee failed for " + label + ": expected " + tag + ", got " + actual + ".");
+    return value;
+};`,
+}
+
 // ESNext Helpers
 
 var addDisposableResourceHelper = &EmitHelper{

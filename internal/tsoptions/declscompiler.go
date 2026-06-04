@@ -186,6 +186,17 @@ var commonOptionsWithBuild = []*CommandLineOption{
 		// Not setting affectsSemanticDiagnostics or affectsBuildInfo because we dont want all diagnostics to go away, its handled in builder
 	},
 	{
+		Name:                       "runtimeGuarantees",
+		Kind:                       CommandLineOptionTypeEnum,
+		ShowInSimplifiedHelpView:   true,
+		Category:                   diagnostics.Type_Checking,
+		Description:                diagnostics.Emit_runtime_type_checks_for_supported_TypeScript_annotations,
+		DefaultValueDescription:    "off",
+		AffectsEmit:                true,
+		AffectsBuildInfo:           true,
+		AffectsSemanticDiagnostics: false,
+	},
+	{
 		Name:                    "deduplicatePackages",
 		Kind:                    CommandLineOptionTypeBoolean,
 		Category:                diagnostics.Type_Checking,

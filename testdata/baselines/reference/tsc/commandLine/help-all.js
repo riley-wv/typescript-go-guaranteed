@@ -276,6 +276,10 @@ Raise an error when a function parameter isn't read.
 type: boolean
 default: false
 
+[94m--runtimeGuarantees[39m
+Emit runtime type checks for supported TypeScript annotations.
+one of: off, observe, suggest, boundary, all, strict/build
+
 [94m--stableTypeOrdering[39m
 Ensure types are ordered stably and deterministically across compilations.
 type: boolean

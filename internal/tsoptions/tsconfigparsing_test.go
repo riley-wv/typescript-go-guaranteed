@@ -33,6 +33,36 @@ type testConfig struct {
 	allFileList    map[string]string
 }
 
+func TestRuntimeGuaranteesCompilerOptionFromTsconfig(t *testing.T) {
+	t.Parallel()
+	data := []struct {
+		value string
+		mode  core.RuntimeGuaranteesMode
+	}{
+		{value: "observe", mode: core.RuntimeGuaranteesModeObserve},
+		{value: "suggest", mode: core.RuntimeGuaranteesModeSuggest},
+		{value: "boundary", mode: core.RuntimeGuaranteesModeBoundary},
+		{value: "all", mode: core.RuntimeGuaranteesModeAll},
+		{value: "strict", mode: core.RuntimeGuaranteesModeStrict},
+		{value: "build", mode: core.RuntimeGuaranteesModeStrict},
+	}
+	for _, rec := range data {
+		t.Run(rec.value, func(t *testing.T) {
+			t.Parallel()
+			parsed := tsoptionstest.GetParsedCommandLine(t, `{
+  "compilerOptions": {
+    "runtimeGuarantees": "`+rec.value+`"
+  },
+  "files": ["index.ts"]
+}`, map[string]string{
+				"/project/index.ts": "export function f(x: string) { return x; }",
+			}, "/project", true)
+			assert.Assert(t, len(parsed.Errors) == 0)
+			assert.Equal(t, parsed.CompilerOptions().RuntimeGuarantees, rec.mode)
+		})
+	}
+}
+
 var parseConfigFileTextToJsonTests = []struct {
 	title string
 	input []string

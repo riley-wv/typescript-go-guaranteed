@@ -191,6 +191,16 @@ var moduleDetectionOptionMap = collections.NewOrderedMapFromList([]collections.M
 	{Key: "force", Value: core.ModuleDetectionKindForce},
 })
 
+var runtimeGuaranteesOptionMap = collections.NewOrderedMapFromList([]collections.MapEntry[string, any]{
+	{Key: "off", Value: core.RuntimeGuaranteesModeOff},
+	{Key: "observe", Value: core.RuntimeGuaranteesModeObserve},
+	{Key: "suggest", Value: core.RuntimeGuaranteesModeSuggest},
+	{Key: "boundary", Value: core.RuntimeGuaranteesModeBoundary},
+	{Key: "all", Value: core.RuntimeGuaranteesModeAll},
+	{Key: "strict", Value: core.RuntimeGuaranteesModeStrict},
+	{Key: "build", Value: core.RuntimeGuaranteesModeStrict},
+})
+
 var jsxOptionMap = collections.NewOrderedMapFromList([]collections.MapEntry[string, any]{
 	{Key: "preserve", Value: core.JsxEmitPreserve},
 	{Key: "react-native", Value: core.JsxEmitReactNative},

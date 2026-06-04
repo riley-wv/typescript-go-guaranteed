@@ -98,6 +98,11 @@ tsc: The TypeScript Compiler - Version FakeTSVersion                            
                default:  false
 
 
+[94m    --runtimeGuarantees  [39mEmit runtime type checks for supported TypeScript annotations.
+
+                one of:  off, observe, suggest, boundary, all, strict/build
+
+
 [94m               --noEmit  [39mDisable emitting files from a compilation.
 
                   type:  boolean

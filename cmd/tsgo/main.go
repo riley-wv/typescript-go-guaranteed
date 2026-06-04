@@ -20,6 +20,8 @@ func runMain() int {
 			return runLSP(args[1:])
 		case "--api":
 			return runAPI(args[1:])
+		case "guarantee":
+			return runGuarantee(args[1:])
 		}
 	}
 	result := execute.CommandLine(newSystem(), args, nil)

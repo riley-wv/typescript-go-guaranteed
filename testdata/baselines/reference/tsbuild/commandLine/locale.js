@@ -104,6 +104,10 @@ Disable full type checking (only critical parse and emit errors will be reported
 type: boolean
 default: false
 
+[94m--runtimeGuarantees[39m
+Emit runtime type checks for supported TypeScript annotations.
+one of: off, observe, suggest, boundary, all, strict/build
+
 [94m--deduplicatePackages[39m
 Deduplicate packages with the same name and version.
 type: boolean

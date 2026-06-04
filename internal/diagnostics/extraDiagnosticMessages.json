@@ -39,6 +39,18 @@
         "category": "Message",
         "code": 100009
     },
+    "Emit runtime type checks for supported TypeScript annotations.": {
+        "category": "Message",
+        "code": 100010
+    },
+    "Runtime guarantees cannot model {0}. Add a runtime contract, handler, or unsafe boundary before enabling strict mode.": {
+        "category": "Error",
+        "code": 100050
+    },
+    "Runtime guarantees observed {0}. Add a runtime contract, handler, or unsafe boundary before enabling strict mode.": {
+        "category": "Suggestion",
+        "code": 100051
+    },
     "Non-relative paths are not allowed. Did you forget a leading './'?": {
         "category": "Error",
         "code": 5090

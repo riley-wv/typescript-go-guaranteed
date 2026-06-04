@@ -95,6 +95,7 @@ type Parser struct {
 	jsdocTagCommentsPartsSpace []*ast.Node
 	reparseList                []*ast.Node
 	commonJSModuleIndicator    *ast.Node
+	runtimeGuarantees          map[*ast.Node]ast.RuntimeGuaranteeClause
 
 	currentParent        *ast.Node
 	setParentFromContext ast.Visitor
@@ -463,6 +464,7 @@ func (p *Parser) parseSourceFileWorker() *ast.SourceFile {
 func (p *Parser) finishSourceFile(result *ast.SourceFile, isDeclarationFile bool) {
 	result.CommentDirectives = p.scanner.CommentDirectives()
 	result.Pragmas = getCommentPragmas(&p.factory, p.sourceText)
+	result.RuntimeGuarantees = p.runtimeGuarantees
 	p.processPragmasIntoFields(result)
 	result.SetDiagnostics(attachFileToDiagnostics(p.diagnostics, result))
 	result.SetJSDocDiagnostics(attachFileToDiagnostics(p.jsdocDiagnostics, result))
@@ -1724,9 +1726,11 @@ func (p *Parser) parseFunctionDeclaration(pos int, jsdoc jsdocScannerInfo, modif
 	}
 	parameters := p.parseParameters(signatureFlags)
 	returnType := p.parseReturnType(ast.KindColonToken, false /*isType*/)
+	runtimeGuarantees := p.parseRuntimeGuaranteeClauses()
 	body := p.parseFunctionBlockOrSemicolon(signatureFlags, diagnostics.X_or_expected)
 	p.contextFlags = saveContextFlags
 	result := p.finishNode(p.factory.NewFunctionDeclaration(modifiers, asteriskToken, name, typeParameters, parameters, returnType, nil /*fullSignature*/, body), pos)
+	p.recordRuntimeGuaranteeClause(result, runtimeGuarantees)
 	p.withJSDoc(result, jsdoc)
 	p.checkJSSyntax(result)
 	return result
@@ -1920,8 +1924,10 @@ func (p *Parser) tryParseConstructorDeclaration(pos int, jsdoc jsdocScannerInfo,
 		typeParameters := p.parseTypeParameters()
 		parameters := p.parseParameters(ParseFlagsNone)
 		returnType := p.parseReturnType(ast.KindColonToken, false /*isType*/)
+		runtimeGuarantees := p.parseRuntimeGuaranteeClauses()
 		body := p.parseFunctionBlockOrSemicolon(ParseFlagsNone, diagnostics.X_or_expected)
 		result := p.finishNode(p.factory.NewConstructorDeclaration(modifiers, typeParameters, parameters, returnType, nil /*fullSignature*/, body), pos)
+		p.recordRuntimeGuaranteeClause(result, runtimeGuarantees)
 		p.withJSDoc(result, jsdoc)
 		p.checkJSSyntax(result)
 		return result
@@ -1951,8 +1957,10 @@ func (p *Parser) parseMethodDeclaration(pos int, jsdoc jsdocScannerInfo, modifie
 	typeParameters := p.parseTypeParameters()
 	parameters := p.parseParameters(signatureFlags)
 	typeNode := p.parseReturnType(ast.KindColonToken, false /*isType*/)
+	runtimeGuarantees := p.parseRuntimeGuaranteeClauses()
 	body := p.parseFunctionBlockOrSemicolon(signatureFlags, diagnosticMessage)
 	result := p.finishNode(p.factory.NewMethodDeclaration(modifiers, asteriskToken, name, questionToken, typeParameters, parameters, typeNode, nil /*fullSignature*/, body), pos)
+	p.recordRuntimeGuaranteeClause(result, runtimeGuarantees)
 	p.withJSDoc(result, jsdoc)
 	p.checkJSSyntax(result)
 	return result
@@ -3206,6 +3214,7 @@ func (p *Parser) parseSignatureMember(kind ast.Kind) *ast.Node {
 	typeParameters := p.parseTypeParameters()
 	parameters := p.parseParameters(ParseFlagsType)
 	typeNode := p.parseReturnType(ast.KindColonToken /*isType*/, true)
+	runtimeGuarantees := p.parseRuntimeGuaranteeClauses()
 	p.parseTypeMemberSemicolon()
 	var result *ast.Node
 	if kind == ast.KindCallSignature {
@@ -3214,6 +3223,7 @@ func (p *Parser) parseSignatureMember(kind ast.Kind) *ast.Node {
 		result = p.factory.NewConstructSignatureDeclaration(typeParameters, parameters, typeNode)
 	}
 	p.finishNode(result, pos)
+	p.recordRuntimeGuaranteeClause(result, runtimeGuarantees)
 	p.withJSDoc(result, jsdoc)
 	return result
 }
@@ -3385,6 +3395,91 @@ func (p *Parser) parseReturnType(returnToken ast.Kind, isType bool) *ast.TypeNod
 	return nil
 }
 
+func (p *Parser) isRuntimeGuaranteeClauseStart() bool {
+	if !tokenIsIdentifierOrKeyword(p.token) {
+		return false
+	}
+	switch strings.ToLower(p.scanner.TokenValue()) {
+	case "throws", "effects", "resources", "validates", "total", "bounded":
+		return true
+	}
+	return false
+}
+
+func (p *Parser) parseRuntimeGuaranteeClauses() ast.RuntimeGuaranteeClause {
+	var result ast.RuntimeGuaranteeClause
+	for p.isRuntimeGuaranteeClauseStart() {
+		pos := p.nodePos()
+		name := strings.ToLower(p.scanner.TokenValue())
+		p.nextToken()
+		switch name {
+		case "throws":
+			result.HasThrows = true
+			result.Throws = append(result.Throws, p.parseRuntimeGuaranteeNameList()...)
+		case "effects", "resources":
+			result.HasEffects = true
+			result.Effects = append(result.Effects, p.parseRuntimeGuaranteeNameList()...)
+		case "validates":
+			result.HasValidates = true
+			result.Validates = append(result.Validates, p.parseRuntimeGuaranteeNameList()...)
+		case "total":
+			result.Total = true
+		case "bounded":
+			result.Bounded = true
+		}
+		result.Loc = core.NewTextRange(pos, p.nodePos())
+	}
+	return result
+}
+
+func (p *Parser) parseRuntimeGuaranteeNameList() []string {
+	if p.parseOptional(ast.KindOpenBracketToken) {
+		var result []string
+		for p.token != ast.KindCloseBracketToken && p.token != ast.KindEndOfFile {
+			if p.parseOptional(ast.KindCommaToken) {
+				continue
+			}
+			name := p.parseRuntimeGuaranteeName()
+			if name != "" {
+				result = append(result, name)
+			}
+			if !p.parseOptional(ast.KindCommaToken) {
+				break
+			}
+		}
+		p.parseExpected(ast.KindCloseBracketToken)
+		return result
+	}
+	name := p.parseRuntimeGuaranteeName()
+	if name == "" {
+		return nil
+	}
+	return []string{name}
+}
+
+func (p *Parser) parseRuntimeGuaranteeName() string {
+	if tokenIsIdentifierOrKeyword(p.token) || p.token == ast.KindStringLiteral {
+		name := p.scanner.TokenValue()
+		p.nextToken()
+		return strings.ToLower(name)
+	}
+	p.parseErrorAtCurrentToken(diagnostics.Identifier_expected)
+	if p.token != ast.KindCloseBracketToken && p.token != ast.KindEndOfFile {
+		p.nextToken()
+	}
+	return ""
+}
+
+func (p *Parser) recordRuntimeGuaranteeClause(node *ast.Node, clause ast.RuntimeGuaranteeClause) {
+	if node == nil || clause.IsEmpty() {
+		return
+	}
+	if p.runtimeGuarantees == nil {
+		p.runtimeGuarantees = make(map[*ast.Node]ast.RuntimeGuaranteeClause)
+	}
+	p.runtimeGuarantees[node] = clause
+}
+
 func (p *Parser) shouldParseReturnType(returnToken ast.Kind, isType bool) bool {
 	if returnToken == ast.KindEqualsGreaterThanToken {
 		p.parseExpected(returnToken)
@@ -3429,6 +3524,7 @@ func (p *Parser) parseAccessorDeclaration(pos int, jsdoc jsdocScannerInfo, modif
 	typeParameters := p.parseTypeParameters()
 	parameters := p.parseParameters(ParseFlagsNone)
 	returnType := p.parseReturnType(ast.KindColonToken, false /*isType*/)
+	runtimeGuarantees := p.parseRuntimeGuaranteeClauses()
 	body := p.parseFunctionBlockOrSemicolon(flags, nil /*diagnosticMessage*/)
 	var result *ast.Node
 	// Keep track of `typeParameters` (for both) and `type` (for setters) if they were parsed those indicate grammar errors
@@ -3438,6 +3534,7 @@ func (p *Parser) parseAccessorDeclaration(pos int, jsdoc jsdocScannerInfo, modif
 		result = p.factory.NewSetAccessorDeclaration(modifiers, name, typeParameters, parameters, returnType, nil /*fullSignature*/, body)
 	}
 	p.withJSDoc(p.finishNode(result, pos), jsdoc)
+	p.recordRuntimeGuaranteeClause(result, runtimeGuarantees)
 	if flags&ParseFlagsType == 0 {
 		p.checkJSSyntax(result)
 	}
@@ -3573,12 +3670,14 @@ func (p *Parser) parsePropertyOrMethodSignature(pos int, jsdoc jsdocScannerInfo,
 	name := p.parsePropertyName()
 	questionToken := p.parseOptionalToken(ast.KindQuestionToken)
 	var result *ast.Node
+	var runtimeGuarantees ast.RuntimeGuaranteeClause
 	if p.token == ast.KindOpenParenToken || p.token == ast.KindLessThanToken {
 		// Method signatures don't exist in expression contexts.  So they have neither
 		// [Yield] nor [Await]
 		typeParameters := p.parseTypeParameters()
 		parameters := p.parseParameters(ParseFlagsType)
 		returnType := p.parseReturnType(ast.KindColonToken /*isType*/, true)
+		runtimeGuarantees = p.parseRuntimeGuaranteeClauses()
 		result = p.factory.NewMethodSignatureDeclaration(modifiers, name, questionToken, typeParameters, parameters, returnType)
 	} else {
 		typeNode := p.parseTypeAnnotation()
@@ -3593,6 +3692,7 @@ func (p *Parser) parsePropertyOrMethodSignature(pos int, jsdoc jsdocScannerInfo,
 	}
 	p.parseTypeMemberSemicolon()
 	p.withJSDoc(p.finishNode(result, pos), jsdoc)
+	p.recordRuntimeGuaranteeClause(result, runtimeGuarantees)
 	return result
 }
 
@@ -3783,6 +3883,7 @@ func (p *Parser) parseFunctionOrConstructorType() *ast.TypeNode {
 	typeParameters := p.parseTypeParameters()
 	parameters := p.parseParameters(ParseFlagsType)
 	returnType := p.parseReturnType(ast.KindEqualsGreaterThanToken, false /*isType*/)
+	runtimeGuarantees := p.parseRuntimeGuaranteeClauses()
 	var result *ast.TypeNode
 	if isConstructorType {
 		result = p.factory.NewConstructorTypeNode(modifiers, typeParameters, parameters, returnType)
@@ -3790,6 +3891,7 @@ func (p *Parser) parseFunctionOrConstructorType() *ast.TypeNode {
 		result = p.factory.NewFunctionTypeNode(typeParameters, parameters, returnType)
 	}
 	p.finishNode(result, pos)
+	p.recordRuntimeGuaranteeClause(result, runtimeGuarantees)
 	p.withJSDoc(result, jsdoc)
 	return result
 }
@@ -4375,6 +4477,7 @@ func (p *Parser) parseParenthesizedArrowFunctionExpression(allowAmbiguity bool, 
 	}
 	hasReturnColon := p.token == ast.KindColonToken
 	returnType := p.parseReturnType(ast.KindColonToken /*isType*/, false)
+	runtimeGuarantees := p.parseRuntimeGuaranteeClauses()
 	if returnType != nil && !allowAmbiguity && typeHasArrowFunctionBlockingParseError(returnType) {
 		return nil
 	}
@@ -4432,6 +4535,7 @@ func (p *Parser) parseParenthesizedArrowFunctionExpression(allowAmbiguity bool, 
 		}
 	}
 	result := p.finishNode(p.factory.NewArrowFunction(modifiers, typeParameters, parameters, returnType, nil /*fullSignature*/, equalsGreaterThanToken, body), pos)
+	p.recordRuntimeGuaranteeClause(result, runtimeGuarantees)
 	p.withJSDoc(result, jsdoc)
 	p.checkJSSyntax(result)
 	return result
@@ -5695,10 +5799,12 @@ func (p *Parser) parseFunctionExpression() *ast.Expression {
 	typeParameters := p.parseTypeParameters()
 	parameters := p.parseParameters(signatureFlags)
 	returnType := p.parseReturnType(ast.KindColonToken, false /*isType*/)
+	runtimeGuarantees := p.parseRuntimeGuaranteeClauses()
 	body := p.parseFunctionBlock(signatureFlags, nil /*diagnosticMessage*/)
 	p.contextFlags = saveContexFlags
 	result := p.factory.NewFunctionExpression(modifiers, asteriskToken, name, typeParameters, parameters, returnType, nil /*fullSignature*/, body)
 	p.finishNode(result, pos)
+	p.recordRuntimeGuaranteeClause(result, runtimeGuarantees)
 	p.withJSDoc(result, jsdoc)
 	p.checkJSSyntax(result)
 	return result

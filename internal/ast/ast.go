@@ -2406,6 +2406,22 @@ type CheckJsDirective struct {
 	Range   CommentRange
 }
 
+type RuntimeGuaranteeClause struct {
+	Loc          core.TextRange
+	Throws       []string
+	Effects      []string
+	Validates    []string
+	HasThrows    bool
+	HasEffects   bool
+	HasValidates bool
+	Total        bool
+	Bounded      bool
+}
+
+func (clause RuntimeGuaranteeClause) IsEmpty() bool {
+	return !clause.HasThrows && !clause.HasEffects && !clause.HasValidates && !clause.Total && !clause.Bounded
+}
+
 type HasFileName interface {
 	FileName() string
 	Path() tspath.Path
@@ -2453,6 +2469,7 @@ type SourceFile struct {
 	TypeReferenceDirectives     []*FileReference
 	LibReferenceDirectives      []*FileReference
 	CheckJsDirective            *CheckJsDirective
+	RuntimeGuarantees           map[*Node]RuntimeGuaranteeClause
 	NodeCount                   int
 	TextCount                   int
 	CommonJSModuleIndicator     *Node
@@ -2623,6 +2640,7 @@ func (node *SourceFile) copyFrom(other *SourceFile) {
 	node.ReferencedFiles = other.ReferencedFiles
 	node.TypeReferenceDirectives = other.TypeReferenceDirectives
 	node.LibReferenceDirectives = other.LibReferenceDirectives
+	node.RuntimeGuarantees = other.RuntimeGuarantees
 	node.CommonJSModuleIndicator = other.CommonJSModuleIndicator
 	node.ExternalModuleIndicator = other.ExternalModuleIndicator
 	node.Flags |= other.Flags

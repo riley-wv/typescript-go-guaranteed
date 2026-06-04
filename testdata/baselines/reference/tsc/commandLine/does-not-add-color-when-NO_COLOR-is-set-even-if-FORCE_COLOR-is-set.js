@@ -88,6 +88,10 @@ Create source map files for emitted JavaScript files.
 type: boolean
 default: false
 
+--runtimeGuarantees
+Emit runtime type checks for supported TypeScript annotations.
+one of: off, observe, suggest, boundary, all, strict/build
+
 --noEmit
 Disable emitting files from a compilation.
 type: boolean

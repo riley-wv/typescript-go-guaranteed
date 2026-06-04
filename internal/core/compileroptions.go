@@ -91,6 +91,7 @@ type CompilerOptions struct {
 	ResolvePackageJsonImports                 Tristate                                  `json:"resolvePackageJsonImports,omitzero"`
 	RemoveComments                            Tristate                                  `json:"removeComments,omitzero"`
 	RewriteRelativeImportExtensions           Tristate                                  `json:"rewriteRelativeImportExtensions,omitzero"`
+	RuntimeGuarantees                         RuntimeGuaranteesMode                     `json:"runtimeGuarantees,omitzero"`
 	ReactNamespace                            string                                    `json:"reactNamespace,omitzero"`
 	RootDir                                   string                                    `json:"rootDir,omitzero"`
 	RootDirs                                  []string                                  `json:"rootDirs,omitzero"`
@@ -378,6 +379,33 @@ const (
 	ModuleDetectionKindLegacy ModuleDetectionKind = 2
 	ModuleDetectionKindForce  ModuleDetectionKind = 3
 )
+
+type RuntimeGuaranteesMode int32
+
+const (
+	RuntimeGuaranteesModeOff RuntimeGuaranteesMode = iota
+	RuntimeGuaranteesModeBoundary
+	RuntimeGuaranteesModeAll
+	RuntimeGuaranteesModeObserve
+	RuntimeGuaranteesModeSuggest
+	RuntimeGuaranteesModeStrict
+)
+
+func (mode RuntimeGuaranteesMode) EmitsRuntimeGuarantees() bool {
+	return mode == RuntimeGuaranteesModeBoundary ||
+		mode == RuntimeGuaranteesModeAll ||
+		mode == RuntimeGuaranteesModeStrict
+}
+
+func (mode RuntimeGuaranteesMode) ReportsRuntimeGuaranteeRisks() bool {
+	return mode == RuntimeGuaranteesModeObserve ||
+		mode == RuntimeGuaranteesModeSuggest ||
+		mode == RuntimeGuaranteesModeStrict
+}
+
+func (mode RuntimeGuaranteesMode) EnforcesRuntimeGuaranteeRisks() bool {
+	return mode == RuntimeGuaranteesModeStrict
+}
 
 type ModuleKind int32
 

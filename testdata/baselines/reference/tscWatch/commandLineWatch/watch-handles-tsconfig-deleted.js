@@ -62,7 +62,7 @@ Output::
 Diff:: incremental reports config read error while clean build without tsconfig prints usage help
 --- nonIncremental.output.txt
 +++ incremental.output.txt
-@@ -1,144 +1,1 @@
+@@ -1,148 +1,1 @@
 -Version FakeTSVersion
 -tsc: The TypeScript Compiler - Version FakeTSVersion
 -
@@ -145,6 +145,10 @@ Diff:: incremental reports config read error while clean build without tsconfig 
 -Create source map files for emitted JavaScript files.
 -type: boolean
 -default: false
+-
+-[94m--runtimeGuarantees[39m
+-Emit runtime type checks for supported TypeScript annotations.
+-one of: off, observe, suggest, boundary, all, strict/build
 -
 -[94m--noEmit[39m
 -Disable emitting files from a compilation.

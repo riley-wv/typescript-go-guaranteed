@@ -10,19 +10,19 @@ export default function getExePath() {
 
     let exeDir;
 
-    const expectedPackage = "native-preview-" + process.platform + "-" + process.arch;
+    const expectedPackage = "tsgo-" + process.platform + "-" + process.arch;
 
     if (normalizedDirname.endsWith("/_packages/native-preview/lib")) {
         // We're running directly from source in the repo.
         exeDir = path.resolve(__dirname, "..", "..", "..", "built", "local");
     }
-    else if (normalizedDirname.endsWith("/built/npm/native-preview/lib")) {
+    else if (normalizedDirname.endsWith("/built/npm/tsgo/lib")) {
         // We're running from the built output.
         exeDir = path.resolve(__dirname, "..", "..", expectedPackage, "lib");
     }
     else {
         // We're actually running from an installed package.
-        const platformPackageName = "@typescript/" + expectedPackage;
+        const platformPackageName = "@ts-guaranteed/" + expectedPackage;
         try {
             if (typeof import.meta.resolve === "undefined") {
                 // v16.20.1

@@ -1,79 +1,179 @@
-# TypeScript 7
+# TypeScript Go Guaranteed
 
-[Not sure what this is? Read the announcement post!](https://devblogs.microsoft.com/typescript/typescript-native-port/)
+`typescript-go-guaranteed` is an independently maintained open source fork of the native TypeScript compiler preview. It keeps the upstream project layout intentionally close to `microsoft/typescript-go` while adding runtime guarantee checks and migration tooling.
 
-## Preview
-
-A preview build is available on npm as [`@typescript/native-preview`](https://www.npmjs.com/package/@typescript/native-preview).
+The npm packages are published under the `@ts-guaranteed` scope:
 
 ```sh
-npm install @typescript/native-preview
-npx tsgo # Use this as you would tsc.
+bun add --dev @ts-guaranteed/tsgo
+bunx tsgo --help
 ```
 
-A preview VS Code extension is [available on the VS Code marketplace](https://marketplace.visualstudio.com/items?itemName=TypeScriptTeam.native-preview).
+The installable package is `@ts-guaranteed/tsgo`. Platform-specific binary packages are installed as optional dependencies with names like `@ts-guaranteed/tsgo-linux-x64`, `@ts-guaranteed/tsgo-darwin-arm64`, and `@ts-guaranteed/tsgo-win32-x64`.
 
-To use this, set this in your VS Code settings:
+## Runtime Guarantees
+
+Start by scanning an existing project without changing files:
+
+```sh
+bunx tsgo guarantee scan .
+```
+
+Print the starter config for a project:
+
+```sh
+bunx tsgo guarantee init .
+```
+
+Preview safe annotations that can be inserted automatically:
+
+```sh
+bunx tsgo guarantee scan --strict --fix-dry-run .
+```
+
+Apply safe annotations:
+
+```sh
+bunx tsgo guarantee scan --strict --fix .
+```
+
+Useful ignore examples:
+
+```sh
+bunx tsgo guarantee scan --ignore public --ignore "*.generated.js" .
+```
+
+## Migrating Projects
+
+1. Install side-by-side with TypeScript:
+
+   ```sh
+   bun add --dev @ts-guaranteed/tsgo
+   ```
+
+2. Add scripts without replacing your existing `tsc` workflow:
+
+   ```json
+   {
+     "scripts": {
+       "typecheck": "tsc --noEmit",
+       "typecheck:tsgo": "tsgo --noEmit",
+       "guarantee:scan": "tsgo guarantee scan .",
+       "guarantee:strict": "tsgo guarantee scan --strict ."
+     }
+   }
+   ```
+
+3. Run `bun run typecheck:tsgo` in CI as an informational job first.
+
+4. Run `bun run guarantee:scan` and triage findings into modeled runtime contracts, explicit unsafe boundaries, or ignored generated/vendor paths.
+
+5. Promote to `guarantee:strict` only after the project has modeled the reported risks.
+
+For config-based adoption, start with:
 
 ```json
 {
-    "js/ts.experimental.useTsgo": true
+  "compilerOptions": {
+    "runtimeGuarantees": "observe"
+  }
 }
 ```
 
-## What Works So Far?
+Move to `"runtimeGuarantees": "strict"` once reported risks have been handled.
 
-This is still a work in progress and is not yet at full feature parity with TypeScript. Bugs may exist. Please check this list carefully before logging a new issue or assuming an intentional change.
+## Releasing to npm
 
-| Feature | Status | Notes |
-|---------|--------|-------|
-| Program creation | done | Same files and module resolution as TS 6.0. Not all resolution modes supported yet. |
-| Parsing/scanning | done | Exact same syntax errors as TS 6.0 |
-| Commandline and `tsconfig.json` parsing | done | Done, though `tsconfig` errors may not be as helpful. |
-| Type resolution | done | Same types as TS 6.0. |
-| Type checking | done | Same errors, locations, and messages as TS 6.0. Types printback in errors may display differently. |
-| JavaScript-specific inference and JSDoc | done | Complete, but intentionally lacking some features. Declaration emit differs greatly, intentionally, to be closer to TS declarations. |
-| JSX | done | - |
-| Declaration emit | done | - |
-| Emit (JS output) | done | - |
-| Watch mode | prototype | Watches files and rebuilds, but no incremental rechecking. Not optimized. |
-| Build mode / project references | done | - |
-| Incremental build | done | - |
-| Language service (LSP) | in progress | Nearly all features implemented. |
-| API | not ready | - |
+The repo builds one wrapper package and the platform packages required by that wrapper. The generated `built/npm/publish-order.json` controls publish order so platform packages are published before `@ts-guaranteed/tsgo`.
 
-Definitions:
+Build and pack locally:
 
- * **done** aka "believed done": We're not currently aware of any deficits or major work left to do. OK to log bugs
- * **in progress**: currently being worked on; some features may work and some might not. OK to log panics, but nothing else please
- * **prototype**: proof-of-concept only; do not log bugs
- * **not ready**: either haven't even started yet, or far enough from ready that you shouldn't bother messing with it yet
+```sh
+bun install --frozen-lockfile
+bun run release:build --prerelease alpha.0
+```
 
-## Other Notes
+Dry-run publish locally:
 
-Long-term, we expect that this repo and its contents will be merged into `microsoft/TypeScript`.
-As a result, the repo and issue tracker for typescript-go will eventually be closed, so treat discussions/issues accordingly.
+```sh
+bun run release:publish:dry-run --tag next
+```
 
-For a list of intentional changes with respect to TypeScript 6.0, see CHANGES.md.
+Publish locally:
 
-## Contributing
+```sh
+npm login
+bun run release:publish --tag next
+```
 
-This project welcomes contributions and suggestions.  Most contributions require you to agree to a
-Contributor License Agreement (CLA) declaring that you have the right to, and actually do, grant us
-the rights to use your contribution. For details, visit [Contributor License Agreements](https://cla.opensource.microsoft.com).
+If your npm account requires one-time passwords:
 
-When you submit a pull request, a CLA bot will automatically determine whether you need to provide
-a CLA and decorate the PR appropriately (e.g., status check, comment). Simply follow the instructions
-provided by the bot. You will only need to do this once across all repos using our CLA.
+```sh
+bun run release:publish --tag next --otp 123456
+```
 
-This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/).
-For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or
-contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or comments.
+You can also provide the OTP through the environment:
 
-## Trademarks
+```sh
+NPM_OTP=123456 bun run release:publish --tag next
+```
 
-This project may contain trademarks or logos for projects, products, or services. Authorized use of Microsoft
-trademarks or logos is subject to and must follow
-[Microsoft's Trademark & Brand Guidelines](https://www.microsoft.com/legal/intellectualproperty/trademarks/usage/general).
-Use of Microsoft trademarks or logos in modified versions of this project must not cause confusion or imply Microsoft sponsorship.
-Any use of third-party trademarks or logos are subject to those third-party's policies.
+If publishing fails with `E403` and npm says that two-factor authentication or a granular access token with bypass 2FA is required, use one of these paths:
+
+- Local publish: rerun with `--otp <code>` or `NPM_OTP=<code>`.
+- GitHub Actions publish: create a granular npm access token with write access for the `@ts-guaranteed/tsgo*` packages and enable bypass 2FA for that token, then store it as the `NPM_TOKEN` secret on the `npm` environment.
+- Longer-term GitHub Actions publish: configure npm trusted publishing for the release workflow and remove the long-lived token.
+
+GitHub Actions also includes a manual **Publish npm packages** workflow. Run it with `dry_run: true` first, inspect the uploaded tarballs, then rerun with `dry_run: false` when ready.
+
+## Repository Setup
+
+Before making the repository public:
+
+- Create the npm organization or scope `@ts-guaranteed`.
+- Ensure your npm account or organization has permission to publish `@ts-guaranteed/tsgo*`.
+- Add a GitHub Actions environment named `npm` and require manual approval for it.
+- Add `NPM_TOKEN` as an environment secret for `npm`, unless you switch the workflow to npm trusted publishing.
+- Enable Dependabot alerts, secret scanning, push protection, and CodeQL.
+- Enable GitHub Discussions only if you want support questions outside issues.
+
+Recommended branch rules for `main`:
+
+- Require pull requests before merging.
+- Require one approving review.
+- Dismiss stale approvals when new commits are pushed.
+- Require conversation resolution before merge.
+- Require status checks: `build`, `package`, `extension`, `format`, `lint (ubuntu-latest)`, and at least `test (ubuntu-latest)`.
+- Require linear history.
+- Block force pushes and deletions.
+- Restrict who can bypass rules.
+- Use merge queue only after CI duration is understood.
+
+## Upstream Merge Policy
+
+This fork is intentionally shaped to keep upstream merges manageable:
+
+- Keep the Go module path and internal import paths as `github.com/microsoft/typescript-go` unless a full module rename is explicitly planned.
+- Keep upstream directory names such as `_packages/native-preview`.
+- Keep Hereby task names such as `native-preview:*`.
+- Keep VS Code setting and command IDs stable unless the extension is intentionally rebranded.
+- Put fork-specific behavior in small, obvious patches around package metadata, release scripts, docs, and runtime guarantee code.
+
+When pulling from upstream:
+
+```sh
+git fetch upstream
+git merge upstream/main
+bun install --frozen-lockfile
+bun test
+```
+
+Resolve conflicts by preserving upstream structure first, then reapplying fork-specific package and release metadata where needed.
+
+## Status
+
+This remains a preview compiler and is not yet a drop-in replacement for every TypeScript workflow. Keep `tsc` available during migration and compare diagnostics before enforcing `tsgo` in production CI.
+
+## License
+
+This project is licensed under the Apache-2.0 license. See [LICENSE](LICENSE).

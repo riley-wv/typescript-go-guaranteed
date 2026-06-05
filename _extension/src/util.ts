@@ -128,14 +128,14 @@ export function resolveTsdkPath(tsdkPath: string): string {
 }
 
 export async function resolveTsdkPathToExe(tsdkPath: string): Promise<{ path: string; version: string; } | undefined> {
-    if (tsdkPath.endsWith("/@typescript/native-preview") || tsdkPath.endsWith("\\@typescript\\native-preview")) {
+    if (tsdkPath.endsWith("/@ts-guaranteed/tsgo") || tsdkPath.endsWith("\\@ts-guaranteed\\tsgo")) {
         try {
             const packagePath = workspaceResolve(tsdkPath);
             const packageJsonPath = vscode.Uri.joinPath(packagePath, "package.json");
             const packageJson = JSON.parse(await vscode.workspace.fs.readFile(packageJsonPath).then(buffer => buffer.toString()));
             // NOTE: Keep in sync with _packages/native-preview/lib/getExePath.js.
             const exeName = `tsgo${process.platform === "win32" ? ".exe" : ""}`;
-            const platformPackage = `native-preview-${process.platform}-${process.arch}`;
+            const platformPackage = `tsgo-${process.platform}-${process.arch}`;
             const exePath = vscode.Uri.joinPath(packagePath, "..", platformPackage, "lib", exeName);
             await vscode.workspace.fs.stat(exePath);
             return { path: withLongPathPrefix(exePath.fsPath), version: packageJson.version };

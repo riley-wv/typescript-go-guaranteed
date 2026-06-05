@@ -1,10 +1,9 @@
-# Microsoft Open Source Code of Conduct
+# Code of Conduct
 
-This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/).
+This project expects respectful, constructive participation.
 
-Resources:
+Unacceptable behavior includes harassment, personal attacks, sustained disruption, spam, and knowingly submitting low-quality automated work at volume.
 
-- [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/)
-- [Microsoft Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/)
-- Contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with questions or concerns
-- Employees can reach out at [aka.ms/opensource/moderation-support](https://aka.ms/opensource/moderation-support)
+Maintainers may moderate, close, hide, or block interactions that undermine productive collaboration.
+
+Report conduct concerns privately to the repository maintainers.

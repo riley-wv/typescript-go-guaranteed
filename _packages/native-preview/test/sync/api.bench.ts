@@ -10,12 +10,12 @@ import {
     type Node,
     type SourceFile,
     SyntaxKind,
-} from "@typescript/native-preview/unstable/ast";
+} from "@ts-guaranteed/tsgo/unstable/ast";
 import {
     API,
     type Project,
     type Snapshot,
-} from "@typescript/native-preview/unstable/sync";
+} from "@ts-guaranteed/tsgo/unstable/sync";
 import {
     existsSync,
     writeFileSync,

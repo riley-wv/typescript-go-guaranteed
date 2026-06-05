@@ -1,25 +1,25 @@
-# TypeScript (Native Preview)
+# TypeScript Go Guaranteed
 
-This extension provides a preview of the native implementation of the TypeScript language service. It provides a nightly snapshot of features like go-to-definition, completions, errors and diagnostics, and quick info/tooltip hovers, and more.
+This extension runs the native TypeScript language service from the `typescript-go-guaranteed` fork.
 
 ## Usage
 
-1. Install the extension from the marketplace.
-2. Open a TypeScript or JavaScript file (`.ts`) in your editor.
-3. Activate the extension with the command `TypeScript (Native Preview): Enable (Experimental)`, or update your settings below:
+1. Install the extension.
+2. Install `@ts-guaranteed/tsgo` in the workspace, or use the bundled binary included with the extension package.
+3. Open a TypeScript or JavaScript file.
+4. Run `TypeScript Native Preview: Enable (Experimental)`.
+
+The extension currently keeps the upstream `typescript.native-preview.*` setting and command IDs to reduce upstream merge friction.
 
 ## Configuration
 
-You can enable this extension by modifying the following settings:
-
 ```jsonc
 {
-    // UI Setting:
-    // TypeScript (Native Preview) > Use Tsgo
-    "js/ts.experimental.useTsgo": true
+    "js/ts.experimental.useTsgo": true,
+    "typescript.native-preview.tsdk": "node_modules/@ts-guaranteed/tsgo"
 }
 ```
 
 ## Feedback
 
-If you encounter any issues or have suggestions for improvement, please open an issue on the [GitHub repository](https://github.com/microsoft/typescript-go).
+Report issues at https://github.com/riley-wv/typescript-go-guaranteed/issues.

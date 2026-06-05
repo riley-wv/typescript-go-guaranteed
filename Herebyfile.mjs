@@ -705,7 +705,7 @@ async function runTestTools() {
 }
 
 async function runTestAPI() {
-    await $`npm run -w @typescript/native-preview test:only`;
+    await $`bun run --cwd _packages/native-preview test:only`;
 }
 
 export const testTools = task({
@@ -716,23 +716,23 @@ export const testTools = task({
 
 export const buildAPI = task({
     name: "build:api",
-    description: "Builds @typescript/native-preview JS API.",
+    description: "Builds @ts-guaranteed/tsgo JS API.",
     run: async () => {
-        await $`npm run -w @typescript/native-preview build`;
+        await $`bun run --cwd _packages/native-preview build`;
     },
 });
 
 export const buildAPITests = task({
     name: "build:api:test",
-    description: "Builds the @typescript/native-preview JS API tests.",
+    description: "Builds the @ts-guaranteed/tsgo JS API tests.",
     run: async () => {
-        await $`npm run -w @typescript/native-preview build:test`;
+        await $`bun run --cwd _packages/native-preview build:test`;
     },
 });
 
 export const testAPI = task({
     name: "test:api",
-    description: "Runs the @typescript/native-preview JS API tests.",
+    description: "Runs the @ts-guaranteed/tsgo JS API tests.",
     dependencies: [tsgo, buildAPITests],
     run: runTestAPI,
 });
@@ -1363,9 +1363,9 @@ function cpWithoutNodeModulesOrTsconfig(src, dest) {
 }
 
 const mainNativePreviewPackage = {
-    npmPackageName: "@typescript/native-preview",
-    npmDir: path.join(builtNpm, "native-preview"),
-    npmTarball: path.join(builtNpm, "native-preview.tgz"),
+    npmPackageName: "@ts-guaranteed/tsgo",
+    npmDir: path.join(builtNpm, "tsgo"),
+    npmTarball: path.join(builtNpm, "tsgo.tgz"),
 };
 
 /**
@@ -1395,10 +1395,10 @@ const nativePreviewPlatforms = memoize(() => {
     }
 
     return supportedPlatforms.map(([os, arch, cert, alpine]) => {
-        const npmDirName = `native-preview-${os}-${arch}`;
+        const npmDirName = `tsgo-${os}-${arch}`;
         const npmDir = path.join(builtNpm, npmDirName);
         const npmTarball = `${npmDir}.tgz`;
-        const npmPackageName = `@typescript/${npmDirName}`;
+        const npmPackageName = `@ts-guaranteed/${npmDirName}`;
 
         /** @type {VSCodeTarget[]} */
         const vscodeTargets = [`${os}-${arch === "arm" ? "armhf" : arch}`];
@@ -1543,7 +1543,7 @@ async function runBuildNativePreviewPackages() {
     // No NOTICE.txt here; does not ship the binary or libs. If this changes, we should add it.
 
     // Build JS API and copy dist into the package.
-    await $`npm run -w @typescript/native-preview build`;
+    await $`bun run --cwd _packages/native-preview build`;
     await cpRecursive(path.join(inputDir, "dist"), path.join(mainPackageDir, "dist"));
 
     // Validate that .d.ts files contain no external imports (all imports must start with "." or "#").
@@ -1787,7 +1787,7 @@ async function runPackNativePreviewExtensions() {
     await fs.promises.mkdir(builtVsix, { recursive: true });
 
     // We don't use vscode:prepublish, as that would run the build for each package below.
-    await $({ cwd: extensionDir })`npm run bundle:release`;
+    await $({ cwd: extensionDir })`bun run bundle:release`;
 
     let version = "0.0.0";
     if (options.forRelease) {
@@ -1865,7 +1865,7 @@ export const nativePreviewRelease = task({
     hiddenFromTaskList: true,
     run: async () => {
         if (!options.forRelease || !options.setPrerelease) {
-            throw new Error("native-preview:release requires --forRelease and --setPrerelease flags. Example: npx hereby native-preview:release --forRelease --setPrerelease=dev.1.0");
+            throw new Error("native-preview:release requires --forRelease and --setPrerelease flags. Example: bunx hereby native-preview:release --forRelease --setPrerelease=dev.1.0");
         }
         await runBuildNativePreviewPackages();
         await runSignNativePreviewPackages();
@@ -1889,9 +1889,9 @@ export const allChecks = task({
     name: "all-checks",
     description: "Runs all checks for the Go code (fourslash, lint, tests, etc.)",
     run: async () => {
-        await $`npm run convertfourslash`;
+        await $`bun run convertfourslash`;
         await runTests();
-        await $`npm run updatefailing`;
+        await $`bun run updatefailing`;
         await runFormat();
         await runLint();
         await runTests();

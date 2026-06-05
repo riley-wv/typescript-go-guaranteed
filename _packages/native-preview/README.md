@@ -1,22 +1,36 @@
-# TypeScript (Native Preview)
+# `@ts-guaranteed/tsgo`
 
-This package provides a preview build of [the native port of TypeScript](https://devblogs.microsoft.com/typescript/typescript-native-port/).
-Not all features are implemented yet.
-
-This package is intended for testing and experimentation.
-It will eventually be replaced by the official TypeScript package.
+`@ts-guaranteed/tsgo` packages the native TypeScript compiler preview with runtime guarantee checks from the `typescript-go-guaranteed` fork.
 
 ## Usage
 
-Use the `tsgo` command just like you would use `tsc`:
-
 ```sh
-npx tsgo --help
+bun add --dev @ts-guaranteed/tsgo
+bunx tsgo --help
 ```
 
-## Issues and Feedback
+Run a TypeScript check:
 
-The native port of TypeScript is still in progress.
-We expect many gaps, but are seeking experimentation and feedback.
-If you have found differences that are not yet known, we encourage you to leave feedback on [the issue tracker](https://github.com/microsoft/typescript-go/issues).
+```sh
+bunx tsgo --noEmit
+```
 
+Scan runtime guarantee risks:
+
+```sh
+bunx tsgo guarantee scan .
+```
+
+Preview strict-mode migration fixes:
+
+```sh
+bunx tsgo guarantee scan --strict --fix-dry-run .
+```
+
+## Platform Packages
+
+This package depends on optional platform packages named `@ts-guaranteed/tsgo-<platform>-<arch>`. Bun, npm, pnpm, and Yarn install the matching package for the current system automatically.
+
+## Feedback
+
+Report issues at https://github.com/riley-wv/typescript-go-guaranteed/issues.

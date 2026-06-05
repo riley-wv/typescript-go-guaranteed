@@ -1,25 +1,26 @@
 {
     "private": true,
-    "name": "@typescript/native-preview",
+    "name": "@ts-guaranteed/tsgo",
     "version": "0.0.0",
     "license": "Apache-2.0",
-    "author": "Microsoft Corp.",
-    "homepage": "https://www.typescriptlang.org/",
-    "description": "Preview CLI and JS API for the native TypeScript compiler port",
+    "author": "Webb Ventures",
+    "homepage": "https://github.com/riley-wv/typescript-go-guaranteed#readme",
+    "description": "TypeScript native compiler preview with ts-guaranteed runtime guarantee checks",
     "keywords": [
         "TypeScript",
-        "Microsoft",
         "compiler",
         "language",
         "javascript",
-        "tsgo"
+        "tsgo",
+        "runtime-guarantees"
     ],
     "bugs": {
-        "url": "https://github.com/microsoft/typescript-go/issues"
+        "url": "https://github.com/riley-wv/typescript-go-guaranteed/issues"
     },
     "repository": {
         "type": "git",
-        "url": "https://github.com/microsoft/typescript-go.git"
+        "url": "git+https://github.com/riley-wv/typescript-go-guaranteed.git",
+        "directory": "_packages/native-preview"
     },
     "publishConfig": {
         "access": "public"
@@ -99,18 +100,18 @@
     },
     "scripts": {
         "node": "node --experimental-strip-types --no-warnings --conditions @typescript/source",
-        "generate": "npm run generate:ast && npm run generate:encoder && npm run generate:enums && npm run generate:sync",
+        "generate": "bun run generate:ast && bun run generate:encoder && bun run generate:enums && bun run generate:sync",
         "generate:ast": "node --experimental-strip-types --no-warnings ../../_scripts/generate-ts-ast.ts",
-        "generate:encoder": "npm run node -- ../../_scripts/generate-encoder.ts",
-        "generate:sync": "npm run node -- scripts/generateSync.ts",
-        "generate:enums": "npx hereby generate:enums --herebyfile ../../Herebyfile.mjs",
-        "prebuild": "npm run generate",
+        "generate:encoder": "bun run node -- ../../_scripts/generate-encoder.ts",
+        "generate:sync": "bun run node -- scripts/generateSync.ts",
+        "generate:enums": "bunx hereby generate:enums --herebyfile ../../Herebyfile.mjs",
+        "prebuild": "bun run generate",
         "build": "tsc -b",
-        "prebuild:test": "npm run generate",
+        "prebuild:test": "bun run generate",
         "build:test": "tsc -b test",
-        "test:only": "npm run node -- --test './test/**/*.test.ts'",
-        "pretest": "npm run generate",
-        "test": "npm run test:only"
+        "test:only": "bun run node -- --test './test/**/*.test.ts'",
+        "pretest": "bun run generate",
+        "test": "bun run test:only"
     },
     "devDependencies": {
         "@types/node": "^25.9.1",

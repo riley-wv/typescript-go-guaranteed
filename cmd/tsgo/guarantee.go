@@ -7,6 +7,7 @@ import (
 	"os"
 	pathpkg "path"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/microsoft/typescript-go/internal/ast"
@@ -48,18 +49,40 @@ Commands:
 
 Scan options:
   --strict          Report risks as strict-mode errors.
+  --fix             Write source updates for risks that can be safely modeled.
+  --fix-dry-run     Print source updates that would be written, without changing files.
   --ignore pattern  Skip a file or directory by name, relative path, or glob. Can be repeated.
 
 `)
 }
 
+type runtimeGuaranteeFixMode int
+
+const (
+	runtimeGuaranteeFixModeNone runtimeGuaranteeFixMode = iota
+	runtimeGuaranteeFixModeApply
+	runtimeGuaranteeFixModeDryRun
+)
+
 func runGuaranteeScan(args []string) int {
 	flags := flag.NewFlagSet("guarantee scan", flag.ContinueOnError)
 	strict := flags.Bool("strict", false, "report risks as strict-mode errors")
+	fix := flags.Bool("fix", false, "write source updates for risks that can be safely modeled")
+	fixDryRun := flags.Bool("fix-dry-run", false, "print source updates that would be written, without changing files")
 	var ignorePatterns runtimeGuaranteeIgnorePatterns
 	flags.Var(&ignorePatterns, "ignore", "skip a file or directory by name, relative path, or glob; can be repeated")
 	if err := flags.Parse(args); err != nil {
 		return 2
+	}
+	if *fix && *fixDryRun {
+		fmt.Fprintln(os.Stderr, "--fix and --fix-dry-run cannot be used together.")
+		return 2
+	}
+	fixMode := runtimeGuaranteeFixModeNone
+	if *fix {
+		fixMode = runtimeGuaranteeFixModeApply
+	} else if *fixDryRun {
+		fixMode = runtimeGuaranteeFixModeDryRun
 	}
 	root := "."
 	if flags.NArg() > 0 {
@@ -78,6 +101,7 @@ func runGuaranteeScan(args []string) int {
 
 	files := 0
 	risks := 0
+	fixes := 0
 	err = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -112,11 +136,28 @@ func runGuaranteeScan(args []string) int {
 			return err
 		}
 		fileName := tspath.NormalizePath(path)
-		sourceFile := parser.ParseSourceFile(ast.SourceFileParseOptions{
-			FileName: fileName,
-			Path:     tspath.ToPath(fileName, tspath.NormalizePath(root), osvfs.FS().UseCaseSensitiveFileNames()),
-		}, string(text), scriptKind)
+		sourceFile := parseRuntimeGuaranteeSourceFile(fileName, root, scriptKind, string(text))
 		files++
+		if fixMode != runtimeGuaranteeFixModeNone {
+			fileFixes := compiler.GetRuntimeGuaranteeAutoFixes(sourceFile, options)
+			if len(fileFixes) > 0 {
+				if fixMode == runtimeGuaranteeFixModeDryRun {
+					printRuntimeGuaranteeFixes(rel, path, sourceFile, fileFixes)
+				} else {
+					updated, edits, err := applyRuntimeGuaranteeFixes(sourceFile, string(text), fileFixes)
+					if err != nil {
+						return err
+					}
+					if edits > 0 && updated != string(text) {
+						if err := os.WriteFile(path, []byte(updated), 0o644); err != nil {
+							return err
+						}
+						fixes += edits
+						sourceFile = parseRuntimeGuaranteeSourceFile(fileName, root, scriptKind, updated)
+					}
+				}
+			}
+		}
 		diags := compiler.GetRuntimeGuaranteeDiagnostics(sourceFile, options, !*strict)
 		for _, diag := range diags {
 			risks++
@@ -134,11 +175,254 @@ func runGuaranteeScan(args []string) int {
 		return 1
 	}
 
-	fmt.Fprintf(os.Stdout, "\nRuntime guarantee scan: %d risk(s) across %d file(s).\n", risks, files)
+	fmt.Fprintf(os.Stdout, "\nRuntime guarantee scan: %d risk(s) across %d file(s).", risks, files)
+	if fixMode == runtimeGuaranteeFixModeApply {
+		fmt.Fprintf(os.Stdout, " Applied %d fix(es).", fixes)
+	}
+	fmt.Fprintln(os.Stdout)
 	if *strict && risks > 0 {
 		return 1
 	}
 	return 0
+}
+
+func parseRuntimeGuaranteeSourceFile(fileName string, root string, scriptKind core.ScriptKind, text string) *ast.SourceFile {
+	return parser.ParseSourceFile(ast.SourceFileParseOptions{
+		FileName: fileName,
+		Path:     tspath.ToPath(fileName, tspath.NormalizePath(root), osvfs.FS().UseCaseSensitiveFileNames()),
+	}, text, scriptKind)
+}
+
+type runtimeGuaranteeTextEdit struct {
+	pos  int
+	text string
+}
+
+func printRuntimeGuaranteeFixes(rel string, path string, sourceFile *ast.SourceFile, fixes []compiler.RuntimeGuaranteeAutoFix) {
+	if rel == "" {
+		rel = path
+	}
+	for _, fix := range fixes {
+		pos, ok := runtimeGuaranteeFixInsertPosition(sourceFile, fix)
+		if !ok {
+			continue
+		}
+		line, character := scanner.GetECMALineAndUTF16CharacterOfPosition(sourceFile, pos)
+		fmt.Fprintf(os.Stdout, "%s:%d:%d - fix-dry-run: %s\n", filepath.ToSlash(rel), line+1, character+1, runtimeGuaranteeFixDescription(fix))
+	}
+}
+
+func applyRuntimeGuaranteeFixes(sourceFile *ast.SourceFile, text string, fixes []compiler.RuntimeGuaranteeAutoFix) (string, int, error) {
+	edits := make([]runtimeGuaranteeTextEdit, 0, len(fixes))
+	for _, fix := range fixes {
+		pos, ok := runtimeGuaranteeFixInsertPosition(sourceFile, fix)
+		if !ok {
+			continue
+		}
+		editText, ok := runtimeGuaranteeFixText(sourceFile, text, pos, fix)
+		if !ok {
+			continue
+		}
+		edits = append(edits, runtimeGuaranteeTextEdit{pos: pos, text: editText})
+	}
+	slices.SortStableFunc(edits, func(a, b runtimeGuaranteeTextEdit) int {
+		if a.pos != b.pos {
+			return b.pos - a.pos
+		}
+		return strings.Compare(a.text, b.text)
+	})
+	for _, edit := range edits {
+		if edit.pos < 0 || edit.pos > len(text) {
+			return "", 0, fmt.Errorf("runtime guarantee fix position %d is outside source text", edit.pos)
+		}
+		text = text[:edit.pos] + edit.text + text[edit.pos:]
+	}
+	return text, len(edits), nil
+}
+
+func runtimeGuaranteeFixInsertPosition(sourceFile *ast.SourceFile, fix compiler.RuntimeGuaranteeAutoFix) (int, bool) {
+	if fix.Node == nil {
+		return 0, false
+	}
+	if fix.CommentAnnotation != "" {
+		if sourceFile == nil {
+			return fix.Node.Pos(), true
+		}
+		return scanner.GetTokenPosOfNode(fix.Node, sourceFile, false), true
+	}
+	if sourceFile != nil {
+		if clause, ok := sourceFile.RuntimeGuarantees[fix.Node]; ok && !clause.IsEmpty() {
+			return clause.Loc.End(), true
+		}
+	}
+	switch fix.Node.Kind {
+	case ast.KindFunctionDeclaration:
+		node := fix.Node.AsFunctionDeclaration()
+		if node.Type != nil {
+			return node.Type.End(), true
+		}
+		if node.Parameters != nil {
+			return runtimeGuaranteePositionAfterParameters(sourceFile, node.Parameters), true
+		}
+	case ast.KindFunctionExpression:
+		node := fix.Node.AsFunctionExpression()
+		if node.Type != nil {
+			return node.Type.End(), true
+		}
+		if node.Parameters != nil {
+			return runtimeGuaranteePositionAfterParameters(sourceFile, node.Parameters), true
+		}
+	case ast.KindArrowFunction:
+		node := fix.Node.AsArrowFunction()
+		if node.Type != nil {
+			return node.Type.End(), true
+		}
+		if node.Parameters != nil {
+			return runtimeGuaranteePositionAfterParameters(sourceFile, node.Parameters), true
+		}
+	case ast.KindMethodDeclaration:
+		node := fix.Node.AsMethodDeclaration()
+		if node.Type != nil {
+			return node.Type.End(), true
+		}
+		if node.Parameters != nil {
+			return runtimeGuaranteePositionAfterParameters(sourceFile, node.Parameters), true
+		}
+	case ast.KindConstructor:
+		node := fix.Node.AsConstructorDeclaration()
+		if node.Parameters != nil {
+			return runtimeGuaranteePositionAfterParameters(sourceFile, node.Parameters), true
+		}
+	case ast.KindGetAccessor:
+		node := fix.Node.AsGetAccessorDeclaration()
+		if node.Type != nil {
+			return node.Type.End(), true
+		}
+		if node.Parameters != nil {
+			return runtimeGuaranteePositionAfterParameters(sourceFile, node.Parameters), true
+		}
+	case ast.KindSetAccessor:
+		node := fix.Node.AsSetAccessorDeclaration()
+		if node.Parameters != nil {
+			return runtimeGuaranteePositionAfterParameters(sourceFile, node.Parameters), true
+		}
+	}
+	return 0, false
+}
+
+func runtimeGuaranteePositionAfterParameters(sourceFile *ast.SourceFile, parameters *ast.ParameterList) int {
+	pos := parameters.End()
+	if sourceFile == nil {
+		return pos
+	}
+	text := sourceFile.Text()
+	if pos < 0 || pos >= len(text) {
+		return pos
+	}
+	if close := runtimeGuaranteeFindNextToken(text, pos, ')'); close >= 0 {
+		return close + 1
+	}
+	return pos
+}
+
+func runtimeGuaranteeFindNextToken(text string, pos int, token byte) int {
+	for pos < len(text) {
+		switch text[pos] {
+		case ' ', '\t', '\n', '\r', '\f', '\v':
+			pos++
+		case '/':
+			if pos+1 >= len(text) {
+				return -1
+			}
+			switch text[pos+1] {
+			case '/':
+				pos += 2
+				for pos < len(text) && text[pos] != '\n' && text[pos] != '\r' {
+					pos++
+				}
+			case '*':
+				pos += 2
+				for pos+1 < len(text) && !(text[pos] == '*' && text[pos+1] == '/') {
+					pos++
+				}
+				if pos+1 >= len(text) {
+					return -1
+				}
+				pos += 2
+			default:
+				return -1
+			}
+		default:
+			if text[pos] == token {
+				return pos
+			}
+			return -1
+		}
+	}
+	return -1
+}
+
+func runtimeGuaranteeFixText(sourceFile *ast.SourceFile, text string, pos int, fix compiler.RuntimeGuaranteeAutoFix) (string, bool) {
+	if fix.CommentAnnotation != "" {
+		indent := runtimeGuaranteeLineIndent(text, pos)
+		return "/** " + fix.CommentAnnotation + " */\n" + indent, true
+	}
+	clauseText := runtimeGuaranteeClauseText(fix.Clause)
+	if clauseText == "" {
+		return "", false
+	}
+	prefix := " "
+	if sourceFile != nil {
+		if clause, ok := sourceFile.RuntimeGuarantees[fix.Node]; ok && !clause.IsEmpty() {
+			prefix = " "
+		}
+	}
+	return prefix + clauseText, true
+}
+
+func runtimeGuaranteeClauseText(clause ast.RuntimeGuaranteeClause) string {
+	var parts []string
+	if clause.HasThrows {
+		parts = append(parts, "throws ["+strings.Join(clause.Throws, ", ")+"]")
+	}
+	if clause.HasEffects {
+		parts = append(parts, "effects ["+strings.Join(clause.Effects, ", ")+"]")
+	}
+	if clause.HasValidates {
+		parts = append(parts, "validates ["+strings.Join(clause.Validates, ", ")+"]")
+	}
+	if clause.Total {
+		parts = append(parts, "total")
+	}
+	if clause.Bounded {
+		parts = append(parts, "bounded")
+	}
+	return strings.Join(parts, " ")
+}
+
+func runtimeGuaranteeFixDescription(fix compiler.RuntimeGuaranteeAutoFix) string {
+	if fix.CommentAnnotation != "" {
+		return "add " + fix.CommentAnnotation + " annotation"
+	}
+	clause := runtimeGuaranteeClauseText(fix.Clause)
+	if clause == "" {
+		return fix.Reason
+	}
+	if fix.Reason == "" {
+		return "add " + clause
+	}
+	return "add " + clause + " (" + fix.Reason + ")"
+}
+
+func runtimeGuaranteeLineIndent(text string, pos int) string {
+	lineStart := strings.LastIndexByte(text[:pos], '\n') + 1
+	var end int
+	for end = lineStart; end < pos; end++ {
+		if text[end] != ' ' && text[end] != '\t' {
+			break
+		}
+	}
+	return text[lineStart:end]
 }
 
 type runtimeGuaranteeIgnorePatterns []string

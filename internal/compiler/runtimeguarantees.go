@@ -92,6 +92,174 @@ func GetRuntimeGuaranteeDiagnostics(sourceFile *ast.SourceFile, options *core.Co
 	return getRuntimeGuaranteeDiagnostics(sourceFile, options, suggestions)
 }
 
+type RuntimeGuaranteeAutoFix struct {
+	Node              *ast.Node
+	Clause            ast.RuntimeGuaranteeClause
+	CommentAnnotation string
+	Reason            string
+}
+
+func GetRuntimeGuaranteeAutoFixes(sourceFile *ast.SourceFile, options *core.CompilerOptions) []RuntimeGuaranteeAutoFix {
+	mode := runtimeGuaranteeModeForFile(sourceFile, options)
+	if sourceFile == nil || !mode.ReportsRuntimeGuaranteeRisks() {
+		return nil
+	}
+
+	strict := mode.EnforcesRuntimeGuaranteeRisks()
+	fixesByNode := make(map[*ast.Node]*RuntimeGuaranteeAutoFix)
+	var ordered []*RuntimeGuaranteeAutoFix
+	ensureFix := func(node *ast.Node, reason string) *RuntimeGuaranteeAutoFix {
+		if node == nil {
+			return nil
+		}
+		if fix := fixesByNode[node]; fix != nil {
+			if fix.Reason == "" {
+				fix.Reason = reason
+			}
+			return fix
+		}
+		fix := &RuntimeGuaranteeAutoFix{Node: node, Reason: reason}
+		fixesByNode[node] = fix
+		ordered = append(ordered, fix)
+		return fix
+	}
+	addEffect := func(node *ast.Node, effect string, reason string) {
+		host := ast.FindAncestor(node, ast.IsFunctionLike)
+		if host == nil || runtimeGuaranteeAnnotationsForContext(sourceFile, node).hasEffect(effect) {
+			return
+		}
+		fix := ensureFix(host, reason)
+		if fix == nil || containsRuntimeGuaranteeName(fix.Clause.Effects, effect) {
+			return
+		}
+		fix.Clause.HasEffects = true
+		fix.Clause.Effects = append(fix.Clause.Effects, effect)
+	}
+	addThrows := func(node *ast.Node, reason string) {
+		host := ast.FindAncestor(node, ast.IsFunctionLike)
+		if host == nil || runtimeGuaranteeAnnotationsForContext(sourceFile, node).throws {
+			return
+		}
+		fix := ensureFix(host, reason)
+		if fix == nil || containsRuntimeGuaranteeName(fix.Clause.Throws, "Error") {
+			return
+		}
+		fix.Clause.HasThrows = true
+		fix.Clause.Throws = append(fix.Clause.Throws, "Error")
+	}
+	addValidates := func(node *ast.Node, reason string) {
+		host := ast.FindAncestor(node, ast.IsFunctionLike)
+		if host == nil || runtimeGuaranteeAnnotationsForContext(sourceFile, node).validates {
+			return
+		}
+		fix := ensureFix(host, reason)
+		if fix == nil || containsRuntimeGuaranteeName(fix.Clause.Validates, "unknown") {
+			return
+		}
+		fix.Clause.HasValidates = true
+		fix.Clause.Validates = append(fix.Clause.Validates, "unknown")
+	}
+	addBoundedLoop := func(node *ast.Node) {
+		annotations := runtimeGuaranteeAnnotationsForNode(sourceFile, node)
+		if annotations.bounded || runtimeGuaranteeAnnotationsForContext(sourceFile, node).total {
+			return
+		}
+		fix := ensureFix(node, "mark bounded loop")
+		if fix != nil {
+			fix.CommentAnnotation = "@runtime-bounded"
+		}
+	}
+
+	var walk ast.Visitor
+	walk = func(node *ast.Node) bool {
+		if runtimeGuaranteeAnnotationsForNode(sourceFile, node).unsafe {
+			return false
+		}
+
+		switch node.Kind {
+		case ast.KindCallExpression:
+			call := node.AsCallExpression()
+			annotations := runtimeGuaranteeAnnotationsForContext(sourceFile, node).merge(runtimeGuaranteeAnnotationsForNode(sourceFile, node))
+			if ast.IsImportCall(node) {
+				if !annotations.hasEffect("module") {
+					addEffect(node, "module", "model dynamic import effect")
+				}
+				break
+			}
+			switch call.Expression.Kind {
+			case ast.KindIdentifier:
+				switch call.Expression.Text() {
+				case "fetch":
+					if !annotations.hasEffect("network") {
+						addEffect(node, "network", "model fetch network effect")
+					}
+				case "setTimeout", "setInterval":
+					if !annotations.hasEffect("time") {
+						addEffect(node, "time", "model scheduler effect")
+					}
+				case "require":
+					if !annotations.hasEffect("module") {
+						addEffect(node, "module", "model CommonJS require boundary")
+					}
+				}
+			case ast.KindPropertyAccessExpression:
+				access := call.Expression.AsPropertyAccessExpression()
+				if access.Name() == nil {
+					break
+				}
+				if runtimeGuaranteeExpressionName(access.Expression)+"."+access.Name().Text() == "JSON.parse" {
+					if !annotations.throws {
+						addThrows(node, "model JSON.parse throw path")
+					}
+					if !annotations.validates {
+						addValidates(node, "model JSON.parse validation boundary")
+					}
+				}
+			}
+		case ast.KindThrowStatement:
+			if !runtimeGuaranteeAnnotationsForContext(sourceFile, node).throws {
+				addThrows(node, "model explicit throw path")
+			}
+		case ast.KindPropertyAccessExpression:
+			access := node.AsPropertyAccessExpression()
+			if access.Name() != nil && runtimeGuaranteeExpressionName(access.Expression) == "process" && access.Name().Text() == "env" {
+				if !runtimeGuaranteeAnnotationsForContext(sourceFile, node).hasEffect("env") {
+					addEffect(node, "env", "model process.env input")
+				}
+			}
+		case ast.KindAwaitExpression:
+			if strict && !runtimeGuaranteeAnnotationsForContext(sourceFile, node).throws {
+				addThrows(node, "model awaited rejection path")
+			}
+		case ast.KindForStatement, ast.KindForInStatement, ast.KindForOfStatement, ast.KindWhileStatement, ast.KindDoStatement:
+			if strict {
+				addBoundedLoop(node)
+			}
+		}
+
+		node.ForEachChild(walk)
+		return false
+	}
+	sourceFile.AsNode().ForEachChild(walk)
+
+	result := make([]RuntimeGuaranteeAutoFix, 0, len(ordered))
+	for _, fix := range ordered {
+		if fix.CommentAnnotation != "" || !fix.Clause.IsEmpty() {
+			result = append(result, *fix)
+		}
+	}
+	return result
+}
+
+func containsRuntimeGuaranteeName(names []string, name string) bool {
+	for _, existing := range names {
+		if strings.EqualFold(existing, name) {
+			return true
+		}
+	}
+	return false
+}
+
 func runtimeGuaranteeModeForFile(sourceFile *ast.SourceFile, options *core.CompilerOptions) core.RuntimeGuaranteesMode {
 	if sourceFile != nil && hasRuntimeGuaranteedDirective(sourceFile) {
 		return core.RuntimeGuaranteesModeStrict

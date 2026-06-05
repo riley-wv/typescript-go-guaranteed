@@ -1,16 +1,16 @@
 {
-    "name": "native-preview",
-    "displayName": "TypeScript (Native Preview)",
-    "publisher": "TypeScriptTeam",
-    "author": "Microsoft Corp.",
-    "description": "Preview of the native TypeScript language server for Visual Studio Code.",
+    "name": "tsgo-guaranteed",
+    "displayName": "TypeScript Go Guaranteed",
+    "publisher": "ts-guaranteed",
+    "author": "Webb Ventures",
+    "description": "Preview of the native TypeScript language server with ts-guaranteed runtime guarantee checks.",
     "icon": "logo.png",
     "private": true,
     "version": "0.0.0",
     "type": "commonjs",
     "repository": {
         "type": "git",
-        "url": "https://github.com/microsoft/typescript-go"
+        "url": "https://github.com/riley-wv/typescript-go-guaranteed"
     },
     "enabledApiProposals": [
         "editorHoverVerbosityLevel",
@@ -64,7 +64,7 @@
                     "typescript.native-preview.tsdk": {
                         "type": "string",
                         "scope": "window",
-                        "description": "Path to the @typescript/native-preview package or tsgo binary directory. If not specified, the extension will look for it in the default location.",
+                        "description": "Path to the @ts-guaranteed/tsgo package or tsgo binary directory. If not specified, the extension will look for it in the default location.",
                         "tags": [
                             "experimental"
                         ]
@@ -75,7 +75,7 @@
                             "type": "string"
                         },
                         "default": [],
-                        "description": "Additional paths to tsgo binary directories or @typescript/native-preview packages that should appear in the version selector.",
+                        "description": "Additional paths to tsgo binary directories or @ts-guaranteed/tsgo packages that should appear in the version selector.",
                         "tags": [
                             "experimental"
                         ]
@@ -219,11 +219,11 @@
         "logo.png"
     ],
     "scripts": {
-        "build": "tsc && npm run bundle",
+        "build": "tsc && bun run bundle",
         "bundle": "esbuild src/extension.ts --bundle --external:vscode --platform=node --format=cjs --outfile=dist/extension.bundle.js --sourcemap",
-        "watch": "npm run bundle -- --watch",
+        "watch": "bun run bundle -- --watch",
         "//vscode:prepublish": "we do not use this hook; the Herebyfile runs bundle:release once instead",
-        "bundle:release": "npm run bundle -- --minify"
+        "bundle:release": "bun run bundle -- --minify"
     },
     "dependencies": {
         "@vscode/extension-telemetry": "^1.5.2",
